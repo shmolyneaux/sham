@@ -79,7 +79,7 @@ async def post_asset(request):
     return json({"id": asset_id})
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--asset_dir")
     parser.add_argument("--db_url")
@@ -93,3 +93,7 @@ if __name__ == "__main__":
     config['db_pass'] = config['db_pass'] or args.db_pass
 
     server.run(host="0.0.0.0", port=args.port)
+
+
+if __name__ == "__main__":
+    main()
