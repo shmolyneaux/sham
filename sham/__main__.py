@@ -21,6 +21,7 @@ config = {
     "db_pass": "password",
 }
 
+
 async def get_db_conn():
     # TODO: connection pooling
     if db_url := config.get("db_url"):
@@ -42,21 +43,20 @@ async def get_asset(request, file_name):
     return response.raw(
         # TODO: error handling
         await app.get_asset(config["asset_dir"], asset_id),
-        headers={"Content-Type": mimetypes.guess_type(file_name)[0] or "application/octet-stream"},
+        headers={
+            "Content-Type": mimetypes.guess_type(file_name)[0]
+            or "application/octet-stream"
+        },
     )
+
 
 @server.route("/assets", methods=["GET"])
 async def get_assets(request):
     conn = await get_db_conn()
 
     assets = await app.get_assets(conn, app.SearchParams)
-    return json(
-        {
-            "asset": [
-                {"id": asset_id["id"]} for asset_id in assets
-            ]
-        }
-    )
+    return json({"asset": [{"id": asset_id["id"]} for asset_id in assets]})
+
 
 @server.route("/asset", methods=["POST"])
 async def post_asset(request):
@@ -74,7 +74,9 @@ async def post_asset(request):
 
     # TODO: is there a way to do file streaming?
     # https://sanic.readthedocs.io/en/latest/sanic/streaming.html
-    asset_id = await app.post_asset(conn, config["asset_dir"], upload_file.name, upload_file.body)
+    asset_id = await app.post_asset(
+        conn, config["asset_dir"], upload_file.name, upload_file.body
+    )
 
     return json({"id": asset_id})
 
@@ -88,9 +90,9 @@ def main():
     parser.add_argument("-p", "--port", default=8000)
 
     args = parser.parse_args()
-    config['db_url'] = args.db_url
-    config['db_user'] = config['db_user'] or args.db_user
-    config['db_pass'] = config['db_pass'] or args.db_pass
+    config["db_url"] = args.db_url
+    config["db_user"] = config["db_user"] or args.db_user
+    config["db_pass"] = config["db_pass"] or args.db_pass
 
     server.run(host="0.0.0.0", port=args.port)
 

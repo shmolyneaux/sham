@@ -14,6 +14,7 @@ from sham import __version__, db, app
 # All test coroutines will be treated as marked.
 pytestmark = pytest.mark.asyncio
 
+
 def is_server_up(url):
     try:
         return bool(requests.get(url + "/assets"))
@@ -26,13 +27,16 @@ def db_url():
     url = subprocess.check_output(["pg_tmp"], text=True).strip()
     return url
 
+
 @pytest.fixture
 def sham_server_url(db_url):
     try:
         server_is_up = False
         for _startup_attempt in range(10):
             port = str(random.randint(10000, 20000))
-            p = subprocess.Popen(["python3", "-m", "sham", "--db_url", db_url, "--port", port])
+            p = subprocess.Popen(
+                ["python3", "-m", "sham", "--db_url", db_url, "--port", port]
+            )
             sham_url = f"http://localhost:{port}"
 
             for _connection_attempt in range(200):
@@ -77,11 +81,11 @@ async def test_get_assets(db_url):
         assert asset_data == b"12345"
 
         assets = await app.get_assets(conn, None)
-        assert [asset['id'] for asset in assets] == [1]
+        assert [asset["id"] for asset in assets] == [1]
 
         assert (await app.post_asset(conn, d, "Another Asset", b"24601")) == 2
         assets = await app.get_assets(conn, None)
-        assert [asset['id'] for asset in assets] == [1, 2]
+        assert [asset["id"] for asset in assets] == [1, 2]
 
         print("done")
 
@@ -91,9 +95,7 @@ def test_fullup(sham_server_url):
 
     # We start out with no assets
     res = requests.get(url + "/assets").json()
-    assert res == {
-        "asset": []
-    }
+    assert res == {"asset": []}
 
     # We insert an asset and get its id
     files = {"file": ("my_file_name.foo", "some,data,to,send\n")}
@@ -104,25 +106,23 @@ def test_fullup(sham_server_url):
     res = requests.get(url + "/asset/1")
     assert res
     assert res.content == b"some,data,to,send\n"
-    assert res.headers.get('Content-Type') == 'application/octet-stream'
+    assert res.headers.get("Content-Type") == "application/octet-stream"
 
     # When we get the asset as a .txt, we get back text/plain
     res = requests.get(url + "/asset/1.txt")
     assert res
     assert res.content == b"some,data,to,send\n"
-    assert res.headers.get('Content-Type') == 'text/plain'
+    assert res.headers.get("Content-Type") == "text/plain"
 
     # And similarly with .png and image/png
     res = requests.get(url + "/asset/1.png")
     assert res
     assert res.content == b"some,data,to,send\n"
-    assert res.headers.get('Content-Type') == 'image/png'
+    assert res.headers.get("Content-Type") == "image/png"
 
     # We see this single element when we get all assets
     res = requests.get(url + "/assets").json()
-    assert res == {
-        "asset": [{"id": 1}]
-    }
+    assert res == {"asset": [{"id": 1}]}
 
     # Let's upload another file and see we got the next id
     files = {"file": ("my_file_name.foo", "more,data,to,send\n")}
@@ -131,6 +131,4 @@ def test_fullup(sham_server_url):
 
     # Now we should see both when we get the assets
     res = requests.get(url + "/assets").json()
-    assert res == {
-        "asset": [{"id": 1}, {"id": 2}]
-    }
+    assert res == {"asset": [{"id": 1}, {"id": 2}]}

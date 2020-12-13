@@ -8,6 +8,7 @@ from uuid import uuid4 as uuid
 import aiofiles
 import aiofiles.os
 
+
 @dataclass
 class TagInfo:
     pass
@@ -34,7 +35,7 @@ async def get_asset(asset_dir, asset_id) -> bytes:
     file_path = asset_path_from_dir_and_id(asset_dir, asset_id)
 
     # TODO: 404 on file not found
-    async with aiofiles.open(file_path, 'r+b') as f:
+    async with aiofiles.open(file_path, "r+b") as f:
         return await f.read()
 
 
@@ -56,10 +57,7 @@ async def get_assets(conn, search_params: SearchParams) -> List[int]:
     """
 
     # TODO: actually do a search, rather than returning everything
-    return await conn.fetch(
-        "SELECT id FROM asset WHERE deleted = false;"
-    )
-
+    return await conn.fetch("SELECT id FROM asset WHERE deleted = false;")
 
 
 # TODO: is there a way to do file streaming?
@@ -86,7 +84,7 @@ async def post_asset(
     # TODO: Should have a monitor for this (and admin disk space monitor)
 
     try:
-        tmp_path = Path(asset_dir) / 'tmp'
+        tmp_path = Path(asset_dir) / "tmp"
         # We get scary-looking logs if we don't look before we leap
         if not tmp_path.exists():
             await aiofiles.os.mkdir(tmp_path)
@@ -96,14 +94,16 @@ async def post_asset(
         # catching this exception a lot
         pass
 
-    temp_file_path = Path(asset_dir) / 'tmp' / str(uuid())
-    async with aiofiles.open(temp_file_path, 'w+b') as f:
+    temp_file_path = Path(asset_dir) / "tmp" / str(uuid())
+    async with aiofiles.open(temp_file_path, "w+b") as f:
         await f.write(file_contents)
 
     # Create an entry for a _deleted_ asset. This way, nothing assumes that this
     # asset exists.
     asset_id = await conn.fetchval(
-        "INSERT INTO asset (name, deleted) VALUES ($1, $2) RETURNING id", sanitized_file_name, True
+        "INSERT INTO asset (name, deleted) VALUES ($1, $2) RETURNING id",
+        sanitized_file_name,
+        True,
     )
 
     # Move the asset into its final place

@@ -12,6 +12,6 @@ test: setup
 	poetry run pytest tests
 
 pretty: setup
-	poetry run black
+	poetry run black sham/ tests/
 
 .PHONY: test pretty
