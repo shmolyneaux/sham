@@ -99,23 +99,23 @@ def test_fullup(sham_server_url):
 
     # We insert an asset and get its id
     files = {"file": ("my_file_name.foo", "some,data,to,send\n")}
-    res = requests.post(url + "/asset", files=files).json()
+    res = requests.post(url + "/assets", files=files).json()
     assert res == {"id": 1}
 
     # When we get the asset, we get back an octet-stream
-    res = requests.get(url + "/asset/1")
+    res = requests.get(url + "/assets/1")
     assert res
     assert res.content == b"some,data,to,send\n"
     assert res.headers.get("Content-Type") == "application/octet-stream"
 
     # When we get the asset as a .txt, we get back text/plain
-    res = requests.get(url + "/asset/1.txt")
+    res = requests.get(url + "/assets/1.txt")
     assert res
     assert res.content == b"some,data,to,send\n"
     assert res.headers.get("Content-Type") == "text/plain"
 
     # And similarly with .png and image/png
-    res = requests.get(url + "/asset/1.png")
+    res = requests.get(url + "/assets/1.png")
     assert res
     assert res.content == b"some,data,to,send\n"
     assert res.headers.get("Content-Type") == "image/png"
@@ -126,9 +126,52 @@ def test_fullup(sham_server_url):
 
     # Let's upload another file and see we got the next id
     files = {"file": ("my_file_name.foo", "more,data,to,send\n")}
-    res = requests.post(url + "/asset", files=files).json()
+    res = requests.post(url + "/assets", files=files).json()
     assert res == {"id": 2}
 
     # Now we should see both when we get the assets
     res = requests.get(url + "/assets").json()
     assert res == {"asset": [{"id": 1}, {"id": 2}]}
+
+
+def test_tags(sham_server_url):
+    url = sham_server_url
+
+    # Create a tag that doesn't have an associated asset
+    res = requests.post(
+        url + "/tags",
+        json={"key": "Category", "value": "nature", "linked_asset_id": None},
+    ).json()
+    assert res == {"id": 1}
+
+    # Insert a couple files
+
+    files = {"file": ("chapter1.foo", "neature is neat")}
+    res = requests.post(url + "/assets", files=files).json()
+    assert res == {"id": 1}
+
+    files = {"file": ("chapter2.foo", "neature is really neat")}
+    res = requests.post(url + "/assets", files=files).json()
+    assert res == {"id": 2}
+
+    # Create a tag associated with a specific asset
+    res = requests.post(
+        url + "/tags", json={"key": "next_chapter", "value": "", "linked_asset_id": 2}
+    ).json()
+    assert res == {"id": 2}
+
+    # Apply that tag to the first asset
+    res = requests.post(f"{url}/assets/1/tags", json={"tag_id": 2})
+    assert res
+
+    # Check that the asset has the tag
+    res = requests.get(f"{url}/assets/1/tags").json()
+    assert sorted(res) == [2]
+
+    # Remove the tag
+    res = requests.delete(f"{url}/assets/1/tags/2")
+    assert res
+
+    # Check that the tag has been removed
+    res = requests.get(f"{url}/assets/1/tags").json()
+    assert res == []

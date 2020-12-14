@@ -1,6 +1,6 @@
 import shutil
 import string
-from typing import Union, List
+from typing import Union, List, Optional
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4 as uuid
@@ -11,7 +11,9 @@ import aiofiles.os
 
 @dataclass
 class TagInfo:
-    pass
+    key: str
+    value: str
+    linked_asset_id: Optional[int]
 
 
 @dataclass
@@ -28,7 +30,7 @@ def asset_path_from_dir_and_id(asset_dir, asset_id):
 async def get_asset(asset_dir, asset_id) -> bytes:
     """
     - GET binary data for given asset_id
-        - `GET /asset/<asset-id>`
+        - `GET /assets/<asset-id>`
     404 if asset not in DB / deleted in DB
     5XX if asset is in DB, but on in the filesystem
     """
@@ -39,11 +41,14 @@ async def get_asset(asset_dir, asset_id) -> bytes:
         return await f.read()
 
 
-async def get_asset_tags(asset_id):
+async def get_asset_tags(conn, asset_id):
     """
     - GET tags for asset_id (all tags, including implied tags and assets the link to this one)
-        - `GET /asset/<asset-id>/tags`
+        - `GET /assets/<asset-id>/tags`
     """
+
+    rows = await conn.fetch("SELECT * FROM asset_tag WHERE asset_id=$1", asset_id,)
+    return [row["tag_id"] for row in rows]
 
 
 # TODO: determine what should actually be returned
@@ -67,7 +72,7 @@ async def post_asset(
 ) -> int:
     """
     - POST new binary data and return asset_id
-        - `POST /asset`
+        - `POST /assets`
         - optionally include preview?
         - how does the client generate this?
     """
@@ -118,30 +123,48 @@ async def post_asset(
     # Hey! No transactions (I thought I'd need one at first)
 
 
-async def post_tag(tag: TagInfo):
+async def post_tag(conn, tag: TagInfo):
     """
-    - POST new tag and return... tag_id? (will the frontend use tag ids..?)
+    - POST new tag and return a tag_id that can be applied to an asset
         - `POST /tag`
     """
 
+    # TODO: handle asyncpg.exceptions.ForeignKeyViolationError
+    tag_id = await conn.fetchval(
+        "INSERT INTO tag (key, value, linked_asset_id) VALUES ($1, $2, $3) RETURNING id",
+        tag.key,
+        tag.value,
+        tag.linked_asset_id,
+    )
 
-async def delete_asset(asset_id):
+    return tag_id
+
+
+async def delete_asset(conn, asset_id):
     """
     - DELETE asset_id
-        - `DELETE /asset/<asset-id>`
+        - `DELETE /assets/<asset-id>`
     """
 
 
-async def post_tag_on_asset(asset_id, tag_id):
+async def post_tag_on_asset(conn, asset_id, tag_id):
     """
     - Associate tag with asset (should the client have to create the tag, or should this be an upsert?)
-        - `POST /asset/<asset-id>/tag`
+        - `POST /assets/<asset-id>/tag`
         - Should this be a put?
     """
 
+    # TODO: handle asyncpg.exceptions.ForeignKeyViolationError
+    await conn.execute(
+        "INSERT INTO asset_tag (asset_id, tag_id) VALUES ($1, $2)", asset_id, tag_id,
+    )
 
-async def delete_tag_from_asset(asset_id, tag_id):
+
+async def delete_tag_from_asset(conn, asset_id, tag_id):
     """
     - Tags are never deleted, associations are just removed
-        - `DELETE /asset/<asset-id>/tag/<tag-id>`
+        - `DELETE /assets/<asset-id>/tag/<tag-id>`
     """
+    await conn.execute(
+        "DELETE FROM asset_tag WHERE asset_id=$1 AND tag_id=$2", asset_id, tag_id,
+    )
