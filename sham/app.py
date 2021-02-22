@@ -1,6 +1,6 @@
 import shutil
 import string
-from typing import Union, List, Optional
+from typing import List, Optional
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4 as uuid
@@ -68,7 +68,7 @@ async def get_assets(conn, search_params: SearchParams) -> List[int]:
 # TODO: is there a way to do file streaming?
 # TODO: return type
 async def post_asset(
-    conn, asset_dir: Union[str, Path], unsanitized_file_name: str, file_contents: bytes
+    conn, asset_dir: str | Path, unsanitized_file_name: str, file_contents: bytes
 ) -> int:
     """
     - POST new binary data and return asset_id
