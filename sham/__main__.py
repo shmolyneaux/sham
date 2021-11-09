@@ -32,10 +32,8 @@ async def get_db_conn():
 
 @server.route("/assets/<asset_id_with_extension>", methods=["GET"])
 async def get_asset(request, asset_id_with_extension):
-    # TODO: many we should allow {asset-id}.{whatever-extension}, and guess the
-    # mime types? Otherwise everything will be octet streams...
-    #
-    # Or we could save/load the mime type in the DB?
+    # We allow {asset-id}.{whatever-extension} and we guess the mime types.
+    # Otherwise everything is octet streams.
 
     # TODO: error handling
     asset_id = int(Path(asset_id_with_extension).stem)
@@ -55,7 +53,7 @@ async def get_assets(request):
     conn = await get_db_conn()
 
     assets = await app.get_assets(conn, app.SearchParams)
-    return json({"asset": [{"id": asset_id["id"]} for asset_id in assets]})
+    return json({"asset": [asset.to_dict() for asset in assets]})
 
 
 @server.route("/assets", methods=["POST"])
@@ -69,14 +67,27 @@ async def post_asset(request):
         # TODO: good error
         raise Exception("file body too large")
 
+    if 'filename' in request.form:
+        filename = request.form['filename']
+    else:
+        filename = upload_file.name
+
     conn = await get_db_conn()
     # TODO: is there a way to do file streaming?
     # https://sanic.readthedocs.io/en/latest/sanic/streaming.html
     asset_id = await app.post_asset(
-        conn, config["asset_dir"], upload_file.name, upload_file.body
+        conn, config["asset_dir"], filename, upload_file.body
     )
 
     return json({"id": asset_id})
+
+
+@server.route("/assets/<asset_id>", methods=["DELETE"])
+async def delete_asset(request, asset_id):
+    conn = await get_db_conn()
+    await app.delete_asset(conn, int(asset_id))
+
+    return json("success")
 
 
 @server.route("/tags", methods=["POST"])
@@ -102,6 +113,24 @@ async def post_tag(request):
     )
 
     return json({"id": tag_id})
+
+
+# TODO: support search parameters
+@server.route("/tags", methods=["GET"])
+async def get_tags(request):
+    conn = await get_db_conn()
+
+    return json([
+        tag.to_dict() for tag in await app.get_tags(conn)
+    ])
+
+
+@server.route("/asset_tags", methods=["GET"])
+async def get_all_asset_tags(request):
+    conn = await get_db_conn()
+    asset_tags = await app.get_all_asset_tags(conn)
+
+    return json(asset_tags)
 
 
 @server.route("/assets/<asset_id>/tags", methods=["POST"])

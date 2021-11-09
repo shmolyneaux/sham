@@ -81,13 +81,11 @@ async def test_get_assets(db_url):
         assert asset_data == b"12345"
 
         assets = await app.get_assets(conn, None)
-        assert [asset["id"] for asset in assets] == [1]
+        assert [asset.asset_id for asset in assets] == [1]
 
         assert (await app.post_asset(conn, d, "Another Asset", b"24601")) == 2
         assets = await app.get_assets(conn, None)
-        assert [asset["id"] for asset in assets] == [1, 2]
-
-        print("done")
+        assert [asset.asset_id for asset in assets] == [1, 2]
 
 
 def test_fullup(sham_server_url):
@@ -122,16 +120,18 @@ def test_fullup(sham_server_url):
 
     # We see this single element when we get all assets
     res = requests.get(url + "/assets").json()
-    assert res == {"asset": [{"id": 1}]}
+    assert res == {"asset": [{"id": 1, "name": "my_file_name.foo"}]}
 
     # Let's upload another file and see we got the next id
-    files = {"file": ("my_file_name.foo", "more,data,to,send\n")}
+    files = {"file": ("my_file_name2.foo", "more,data,to,send\n")}
     res = requests.post(url + "/assets", files=files).json()
     assert res == {"id": 2}
 
     # Now we should see both when we get the assets
     res = requests.get(url + "/assets").json()
-    assert res == {"asset": [{"id": 1}, {"id": 2}]}
+    assert res == {"asset": [{"id": 1, "name": "my_file_name.foo"}, {"id": 2, "name": "my_file_name2.foo"}]}
+
+    # TODO: test deleting assets
 
 
 def test_tags(sham_server_url):

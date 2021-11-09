@@ -1,5 +1,5 @@
 # Testing
-Test by running `make test`. Testing requires (`pg_tmp`](https://eradman.com/ephemeralpg/).
+Test by running `make test`. Testing requires [`pg_tmp`](https://eradman.com/ephemeralpg/).
 
 # Running in Development
 Install `sham` into the poetry virtualenv:
@@ -10,6 +10,12 @@ poetry install
 Then run `sham`:
 ```
 poetry run sham
+```
+
+# Running on WSL
+To start postgres:
+```
+sudo service postgresql start
 ```
 
 # Running with Python 3.10 Pattern Matching

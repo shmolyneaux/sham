@@ -1,3 +1,4 @@
+import dataclasses
 import shutil
 import string
 from typing import List, Optional
@@ -43,16 +44,27 @@ async def get_asset(asset_dir, asset_id) -> bytes:
 
 async def get_asset_tags(conn, asset_id):
     """
-    - GET tags for asset_id (all tags, including implied tags and assets the link to this one)
+    - GET tags for asset_id (all tags, including implied tags and assets that link to this one)
         - `GET /assets/<asset-id>/tags`
     """
 
     rows = await conn.fetch("SELECT * FROM asset_tag WHERE asset_id=$1", asset_id,)
     return [row["tag_id"] for row in rows]
 
+@dataclass
+class AssetInfo:
+    asset_id: int
+    name: str
+
+    def to_dict(self):
+        return {
+            "id": self.asset_id,
+            "name": self.name,
+        }
+
 
 # TODO: determine what should actually be returned
-async def get_assets(conn, search_params: SearchParams) -> List[int]:
+async def get_assets(conn, search_params: SearchParams) -> List[AssetInfo]:
     """
     - GET paginated assets matching $SEARCH, returns:
         - `GET /assets?tag=<tag-id>&...`
@@ -62,7 +74,36 @@ async def get_assets(conn, search_params: SearchParams) -> List[int]:
     """
 
     # TODO: actually do a search, rather than returning everything
-    return await conn.fetch("SELECT id FROM asset WHERE deleted = false;")
+    rows = await conn.fetch("SELECT id, name FROM asset WHERE deleted = false;")
+    return [
+        AssetInfo(asset_id=row["id"], name=row["name"])
+        for row in rows
+    ]
+
+
+@dataclass
+class TagResult:
+    tag_id: int
+    key: str
+    value: str
+    linked_asset_id: Optional[int]
+
+    def to_dict(self):
+        return dataclasses.asdict(self)
+
+
+# TODO: add an function for searching for tags
+async def get_tags(conn) -> List[TagResult]:
+    rows = await conn.fetch("SELECT id, key, value, linked_asset_id FROM tag;")
+    return [
+        TagResult(
+            tag_id=row["id"],
+            key=row["key"],
+            value=row["value"],
+            linked_asset_id=row["linked_asset_id"],
+        )
+        for row in rows
+    ]
 
 
 # TODO: is there a way to do file streaming?
@@ -77,7 +118,7 @@ async def post_asset(
         - how does the client generate this?
     """
     # TODO: internationalization
-    acceptable_characters = set(string.ascii_letters) | {" ", "_"} | set(string.digits)
+    acceptable_characters = set(string.ascii_letters) | {" ", "_", "."} | set(string.digits)
     sanitized_file_name = "".join(
         c if c in acceptable_characters else "_" for c in unsanitized_file_name
     )
@@ -105,6 +146,8 @@ async def post_asset(
 
     # Create an entry for a _deleted_ asset. This way, nothing assumes that this
     # asset exists.
+    # TODO: should the name be part of the asset table? It never gets returned
+    # and could be a tag instead...
     asset_id = await conn.fetchval(
         "INSERT INTO asset (name, deleted) VALUES ($1, $2) RETURNING id",
         sanitized_file_name,
@@ -116,7 +159,7 @@ async def post_asset(
     await aiofiles.os.rename(temp_file_path, destination_file_path)
 
     # "un"-delete the asset, other things can now access it
-    await conn.execute("UPDATE asset SET deleted = $1", False)
+    await conn.execute("UPDATE asset SET deleted = $1 WHERE id = $2", False, asset_id)
 
     return asset_id
 
@@ -140,11 +183,12 @@ async def post_tag(conn, tag: TagInfo):
     return tag_id
 
 
-async def delete_asset(conn, asset_id):
+async def delete_asset(conn, asset_id: int):
     """
     - DELETE asset_id
         - `DELETE /assets/<asset-id>`
     """
+    await conn.execute("UPDATE asset SET deleted = $1 WHERE id = $2", True, asset_id)
 
 
 async def post_tag_on_asset(conn, asset_id, tag_id):
@@ -155,6 +199,7 @@ async def post_tag_on_asset(conn, asset_id, tag_id):
     """
 
     # TODO: handle asyncpg.exceptions.ForeignKeyViolationError
+    # TODO: handle asyncpg.exceptions.UniqueViolationError for duplicates
     await conn.execute(
         "INSERT INTO asset_tag (asset_id, tag_id) VALUES ($1, $2)", asset_id, tag_id,
     )
@@ -168,3 +213,8 @@ async def delete_tag_from_asset(conn, asset_id, tag_id):
     await conn.execute(
         "DELETE FROM asset_tag WHERE asset_id=$1 AND tag_id=$2", asset_id, tag_id,
     )
+
+
+async def get_all_asset_tags(conn):
+    rows = await conn.fetch("SELECT asset_id, tag_id FROM asset_tag")
+    return [{"tag_id": row["tag_id"], "asset_id": row["asset_id"]} for row in rows]

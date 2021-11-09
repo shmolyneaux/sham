@@ -4,6 +4,7 @@ from typing import Optional
 SCHEMA_UPDATES = [
     # Version 0 is a no-op
     "SELECT 1",
+    # This is the table of assets
     """
     CREATE TABLE asset (
         id SERIAL PRIMARY KEY NOT NULL,
@@ -11,6 +12,8 @@ SCHEMA_UPDATES = [
         deleted BOOL NOT NULL
     );
     """,
+    # NOTE: the "value" can be an empty string. This way it's never null, even
+    # if a particular (or most) tags don't need values.
     """
     CREATE TABLE tag (
         id SERIAL PRIMARY KEY NOT NULL,
@@ -20,6 +23,10 @@ SCHEMA_UPDATES = [
         UNIQUE (key, value)
     );
     """,
+    # Associated tags allow users to imply one tag when setting another. IE you
+    # can set the `"level":"Bob-omb Battlefield"` and automatically set
+    # `"game":"Super Mario 64"`. Or you could set `"dog":""` and get `"animal":""`
+    # applied automatically.
     """
     CREATE TABLE associated_tag (
         implied_by INTEGER NOT NULL REFERENCES tag(id),
@@ -27,6 +34,7 @@ SCHEMA_UPDATES = [
         PRIMARY KEY (implied_by, implies)
     );
     """,
+    # The asset tag table maps stores the tags for each asset.
     """
     CREATE TABLE asset_tag (
         asset_id INTEGER NOT NULL REFERENCES asset(id),
@@ -34,6 +42,8 @@ SCHEMA_UPDATES = [
         PRIMARY KEY (asset_id, tag_id)
     );
     """,
+    # Need to make the triple unique, otherwise there's a weird situation where
+    # you want to have a new linked_asset for a given key-value pair, but can't.
     """
     ALTER TABLE tag DROP CONSTRAINT tag_key_value_key;
     ALTER TABLE tag ADD UNIQUE (key, value, linked_asset_id);
