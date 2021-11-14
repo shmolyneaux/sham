@@ -15,6 +15,33 @@ from . import db
 
 server = Sanic(name="sham")
 
+
+# Documentation-provided functions for CORS
+def _add_cors_headers(response, methods: Iterable[str]) -> None:
+    allow_methods = list(set(methods))
+    if "OPTIONS" not in allow_methods:
+        allow_methods.append("OPTIONS")
+    headers = {
+        "Access-Control-Allow-Methods": ",".join(allow_methods),
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Headers": (
+            "origin, content-type, accept, "
+            "authorization, x-xsrf-token, x-request-id"
+        ),
+    }
+    response.headers.extend(headers)
+
+
+def add_cors_headers(request, response):
+    if request.method != "OPTIONS":
+        methods = list(request.route.methods)
+        _add_cors_headers(response, methods)
+
+
+server.register_middleware(add_cors_headers, "response")
+
+
 config = {
     "asset_dir": Path("~/tmp").expanduser().as_posix(),
     "db_user": "stephen",

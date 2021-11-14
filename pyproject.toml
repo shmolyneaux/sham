@@ -6,7 +6,7 @@ authors = ["Stephen Molyneaux <stephen@molyneaux.ca>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-sanic = "^19.12.2"
+sanic = "^21.9.0"
 aiofiles = "^0.6.0"
 asyncpg = {path = "../../build/asyncpg"}
 
