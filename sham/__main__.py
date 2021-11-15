@@ -1,6 +1,7 @@
 import argparse
 import mimetypes
 import string
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from sanic import response
@@ -49,12 +50,18 @@ config = {
 }
 
 
+@asynccontextmanager
 async def get_db_conn():
     # TODO: connection pooling
     if db_url := config.get("db_url"):
-        return await db.connect_to_db_by_url(db_url)
+        conn = await db.connect_to_db_by_url(db_url)
+    else:
+        conn = await db.connect_to_db(config["db_user"], config["db_pass"])
 
-    return await db.connect_to_db(config["db_user"], config["db_pass"])
+    try:
+        yield conn
+    finally:
+        await conn.close()
 
 
 @server.route("/assets/<asset_id_with_extension>", methods=["GET"])
@@ -77,9 +84,9 @@ async def get_asset(request, asset_id_with_extension):
 
 @server.route("/assets", methods=["GET"])
 async def get_assets(request):
-    conn = await get_db_conn()
+    async with get_db_conn() as conn:
+        assets = await app.get_assets(conn, app.SearchParams)
 
-    assets = await app.get_assets(conn, app.SearchParams)
     return json({"asset": [asset.to_dict() for asset in assets]})
 
 
@@ -99,20 +106,20 @@ async def post_asset(request):
     else:
         filename = upload_file.name
 
-    conn = await get_db_conn()
-    # TODO: is there a way to do file streaming?
-    # https://sanic.readthedocs.io/en/latest/sanic/streaming.html
-    asset_id = await app.post_asset(
-        conn, config["asset_dir"], filename, upload_file.body
-    )
+    async with get_db_conn() as conn:
+        # TODO: is there a way to do file streaming?
+        # https://sanic.readthedocs.io/en/latest/sanic/streaming.html
+        asset_id = await app.post_asset(
+            conn, config["asset_dir"], filename, upload_file.body
+        )
 
     return json({"id": asset_id})
 
 
 @server.route("/assets/<asset_id>", methods=["DELETE"])
 async def delete_asset(request, asset_id):
-    conn = await get_db_conn()
-    await app.delete_asset(conn, int(asset_id))
+    async with get_db_conn() as conn:
+        await app.delete_asset(conn, int(asset_id))
 
     return json("success")
 
@@ -129,15 +136,15 @@ async def post_tag(request):
     assert isinstance(value, str)
     assert isinstance(linked_asset_id, int) or linked_asset_id == None
 
-    conn = await get_db_conn()
-    tag_id = await app.post_tag(
-        conn,
-        app.TagInfo(
-            key=request.json["key"],
-            value=request.json["value"],
-            linked_asset_id=request.json.get("linked_asset_id"),
-        ),
-    )
+    async with get_db_conn() as conn:
+        tag_id = await app.post_tag(
+            conn,
+            app.TagInfo(
+                key=request.json["key"],
+                value=request.json["value"],
+                linked_asset_id=request.json.get("linked_asset_id"),
+            ),
+        )
 
     return json({"id": tag_id})
 
@@ -145,17 +152,16 @@ async def post_tag(request):
 # TODO: support search parameters
 @server.route("/tags", methods=["GET"])
 async def get_tags(request):
-    conn = await get_db_conn()
-
-    return json([
-        tag.to_dict() for tag in await app.get_tags(conn)
-    ])
+    async with get_db_conn() as conn:
+        return json([
+            tag.to_dict() for tag in await app.get_tags(conn)
+        ])
 
 
 @server.route("/asset_tags", methods=["GET"])
 async def get_all_asset_tags(request):
-    conn = await get_db_conn()
-    asset_tags = await app.get_all_asset_tags(conn)
+    async with get_db_conn() as conn:
+        asset_tags = await app.get_all_asset_tags(conn)
 
     return json(asset_tags)
 
@@ -173,8 +179,8 @@ async def post_tag_on_asset(request, asset_id):
     tag_id = request.json.get("tag_id")
     assert isinstance(tag_id, int)
 
-    conn = await get_db_conn()
-    tag_id = await app.post_tag_on_asset(conn, asset_id=asset_id, tag_id=tag_id)
+    async with get_db_conn() as conn:
+        tag_id = await app.post_tag_on_asset(conn, asset_id=asset_id, tag_id=tag_id)
 
     return json({"result": "you did it!"})
 
@@ -187,8 +193,8 @@ async def get_tags_on_asset(request, asset_id):
         # TODO: Return 4xx error
         raise AssertionError(f"{asset_id} is not an int")
 
-    conn = await get_db_conn()
-    tag_ids = await app.get_asset_tags(conn, asset_id=asset_id,)
+    async with get_db_conn() as conn:
+        tag_ids = await app.get_asset_tags(conn, asset_id=asset_id,)
 
     return json(tag_ids)
 
@@ -207,10 +213,10 @@ async def delete_tag_on_asset(request, asset_id, tag_id):
         # TODO: Return 4xx error
         raise AssertionError(f"{tag_id} is not an int")
 
-    conn = await get_db_conn()
-    await app.delete_tag_from_asset(
-        conn, asset_id=asset_id, tag_id=tag_id,
-    )
+    async with get_db_conn() as conn:
+        await app.delete_tag_from_asset(
+            conn, asset_id=asset_id, tag_id=tag_id,
+        )
 
     return json({"result": "you did it!"})
 
